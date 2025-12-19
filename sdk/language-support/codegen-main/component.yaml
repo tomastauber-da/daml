@@ -13,3 +13,7 @@ spec:
       name: codegen-js
       desc: Daml to Javascript compiler
       jar-args: ["js"]
+    - path: binary.jar
+      name: codegen-rust
+      desc: Daml to Rust compiler
+      jar-args: ["rust"]

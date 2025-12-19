@@ -1,0 +1,19 @@
+<configuration>
+
+    <appender name="STDOUT-SIMPLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>[%-5level] %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="STDOUT-BACKEND" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>[%-5level] %msg \(%X{entityType} %X{moduleName}:%X{entityName}, package %X{packageIdShort}\)%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="ERROR">
+        <appender-ref ref="STDOUT-SIMPLE" />
+    </root>
+
+</configuration>

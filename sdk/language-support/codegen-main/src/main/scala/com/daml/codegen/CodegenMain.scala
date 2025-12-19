@@ -75,5 +75,11 @@ object CodegenMain {
       .text("To generate Javascript code and Typescript declarations:\n")
       .children(help("help").text("JS codegen help"))
     note("\n")
+
+    cmd("rust")
+      .action((_, _) => RustCodegenRunner)
+      .text("To generate Rust code:\n")
+      .children(help("help").text("Rust codegen help"))
+    note("\n")
   }
 }
