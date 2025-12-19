@@ -46,7 +46,7 @@ private[codegen] final case class TemplateGen(
     keyTypeOpt: Option[Ast.Type], // We need the Type, not the Decoder
     choices: Seq[ChoiceGen],
     implements: Seq[TypeConId],
-    pkgIdToName: Map[PackageId, String]
+    pkgIdToName: Map[PackageId, String],
 ) extends DefGen {
 
   private val templateId = s"${moduleId.pkg}:${moduleId.moduleName}:$name"
@@ -76,8 +76,8 @@ private[codegen] final case class TemplateNamespaceGen(
     moduleId: ModuleId,
     name: Name,
     key: Ast.Type,
-    pkgIdToName: Map[PackageId, String]
-                                                      ) extends DefGen {
+    pkgIdToName: Map[PackageId, String],
+) extends DefGen {
   override def renderRust(b: CodeBuilder): Unit = {
     // In Rust, we might just define a type alias if strictly necessary,
     // but usually the Key type is defined in the impl block.
@@ -94,8 +94,8 @@ private[codegen] final case class TypeConGen(
     name: Name,
     paramNames: Seq[Ast.TypeVarName],
     cons: Ast.DataCons,
-    pkgIdToName: Map[PackageId, String]
-                                            ) extends DefGen {
+    pkgIdToName: Map[PackageId, String],
+) extends DefGen {
 
   override def renderRust(b: CodeBuilder): Unit = {
     b.addEmptyLine()
@@ -140,12 +140,11 @@ private[codegen] final case class TypeConGen(
 /** Generates Choice Structs and Implementations.
   */
 private[codegen] final case class ChoiceGen(
-                                             name: Name,
-                                             argType: Ast.Type,
-                                             returnType: Ast.Type,
-                                             pkgIdToName: Map[PackageId, String]
-
-                                           ) {
+    name: Name,
+    argType: Ast.Type,
+    returnType: Ast.Type,
+    pkgIdToName: Map[PackageId, String],
+) {
 
   def renderRust(moduleId: ModuleId, templateName: Name, b: CodeBuilder): Unit = {
     val argTypeStr = TypeGen.renderType(moduleId, argType, pkgIdToName)
@@ -186,14 +185,16 @@ private[codegen] final case class InterfaceGen(
     name: String,
     choices: Seq[ChoiceGen],
     view: TypeConId,
-    pkgIdToName: Map[PackageId, String]
+    pkgIdToName: Map[PackageId, String],
 ) extends DefGen {
 
   override def renderRust(b: CodeBuilder): Unit = {
     // Generate a Trait for the Interface
     b.addEmptyLine()
     b.addBlock(s"pub trait $name: daml_types::Template {", "}") {
-      b.addLine(s"// Interface view: ${TypeGen.renderType(moduleId, Ast.TTyCon(view), pkgIdToName)}")
+      b.addLine(
+        s"// Interface view: ${TypeGen.renderType(moduleId, Ast.TTyCon(view), pkgIdToName)}"
+      )
     }
 
     // We might also generate the Choices associated with this Interface

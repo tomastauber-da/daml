@@ -14,10 +14,10 @@ private object TypeGen {
     * standard wrapper types (Party, ContractId, etc.).
     */
   def renderType(
-                  currentModule: ModuleId,
-                  tpe: Ast.Type,
-                  pkgIdToName: Map[PackageId, String]
-                ): String = {
+      currentModule: ModuleId,
+      tpe: Ast.Type,
+      pkgIdToName: Map[PackageId, String],
+  ): String = {
     def rec(tpe: Ast.Type): String =
       tpe match {
         // Generic Type Variables (e.g., T)
@@ -78,7 +78,11 @@ private object TypeGen {
 
   /** Resolves the Rust path to a Type Constructor (Template or Record).
     */
-  def renderTypeCon(currentModule: ModuleId, typeCon: TypeConId, pkgIdToName: Map[PackageId, String]): String = {
+  def renderTypeCon(
+      currentModule: ModuleId,
+      typeCon: TypeConId,
+      pkgIdToName: Map[PackageId, String],
+  ): String = {
     if (currentModule.pkg != typeCon.pkg) {
       // External Package Resolution
       val pkgName = pkgIdToName.get(typeCon.pkg) match {

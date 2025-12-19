@@ -66,8 +66,8 @@ object RustCodeGen extends StrictLogging {
       packageId: PackageId,
       packageSig: Ast.PackageSignature,
       damlVersion: String,
-      pkgIdToName: Map[PackageId, String]
-                             ): Unit = {
+      pkgIdToName: Map[PackageId, String],
+  ): Unit = {
     logger.info(
       s"Generating Rust code for package: ${packageSig.metadata.name} (package ID: $packageId)"
     )
@@ -87,7 +87,7 @@ object RustCodeGen extends StrictLogging {
           packageSig.metadata.name,
           module,
           damlVersion,
-          pkgIdToName
+          pkgIdToName,
         )
         Files.write(moduleFile, moduleContent.getBytes)
         logger.debug(s"Generated module file: $moduleFile")
@@ -104,7 +104,7 @@ object RustCodeGen extends StrictLogging {
       packageName: PackageName,
       module: Ast.ModuleSignature,
       damlVersion: String,
-      pkgIdToName: Map[PackageId, String]
+      pkgIdToName: Map[PackageId, String],
   ): String = {
     // 1. Partition Definitions
     val (topLevelDefinitions, nestedDefinitions) =
@@ -154,7 +154,7 @@ object RustCodeGen extends StrictLogging {
       templateName: Name,
       templateSig: Ast.TemplateSignature,
       dataDef: Ast.DDataType,
-      pkgIdToName: Map[PackageId, String]
+      pkgIdToName: Map[PackageId, String],
   ): Seq[DefGen] = {
     // 1. Generate the Struct/Enum for the template payload
     val paramNames = dataDef.params.toSeq.map { case (name, _) => name }
@@ -175,11 +175,12 @@ object RustCodeGen extends StrictLogging {
       templateSig.key.map(_.typ), // Pass the AST Type, not a Decoder
       choices,
       templateSig.implements.values.toSeq.map(_.interfaceId),
-      pkgIdToName
+      pkgIdToName,
     )
 
     // 4. Handle Key namespace if necessary (optional in Rust, but good for aliases)
-    val namespaceOpt = templateSig.key.map(k => TemplateNamespaceGen(moduleId, templateName, k.typ, pkgIdToName))
+    val namespaceOpt =
+      templateSig.key.map(k => TemplateNamespaceGen(moduleId, templateName, k.typ, pkgIdToName))
 
     Seq(typeCon, template) ++ namespaceOpt
   }
@@ -189,7 +190,7 @@ object RustCodeGen extends StrictLogging {
       dataConName: Name,
       dataDef: Ast.DDataType,
       nestedDefinitions: Seq[(DottedName, Ast.DDataType)],
-      pkgIdToName: Map[PackageId, String]
+      pkgIdToName: Map[PackageId, String],
   ): Seq[DefGen] = {
     val paramNames = dataDef.params.toSeq.map { case (name, _) => name }
 
@@ -220,7 +221,7 @@ object RustCodeGen extends StrictLogging {
       packageName: PackageName,
       interfaceName: DottedName,
       interface: Ast.DefInterfaceSignature,
-      pkgIdToName: Map[PackageId, String]
+      pkgIdToName: Map[PackageId, String],
   ): DefGen = {
     // Interfaces usually have a View type associated
     val viewId = interface.view match {
