@@ -60,4 +60,3 @@ private[codegen] class CodeBuilder() {
     indentation = indentation.drop(2)
   }
 }
-
