@@ -136,16 +136,18 @@ object RustCodeGen extends StrictLogging {
   }
 
   private def sanitizePackageName(name: PackageName): String = {
-    name.toString()
+    val sanitized = name.toString()
       .toLowerCase()
       .replaceAll("[^a-z0-9_]", "_")
-      .replaceAll("^[0-9]+", "_")
+    // Prepend underscore if starts with digit
+    if (sanitized.matches("^[0-9].*")) s"_$sanitized" else sanitized
   }
 
   private def sanitizeModuleName(name: String): String = {
-    name
+    val sanitized = name
       .toLowerCase()
       .replaceAll("[^a-z0-9_]", "_")
-      .replaceAll("^[0-9]+", "_")
+    // Prepend underscore if starts with digit
+    if (sanitized.matches("^[0-9].*")) s"_$sanitized" else sanitized
   }
 }
