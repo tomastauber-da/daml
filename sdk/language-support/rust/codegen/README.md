@@ -3,7 +3,7 @@
 This is a code generator for Rust bindings to a Daml package. To run it, you must execute:
 
 ```console
-$ bazel run //sdk/language-support/rust/codegen:codegen -- --help
+$ bazel run //language-support/rust/codegen:codegen -- --help
 Usage: codegen-rust [options] <DAR-file>...
 
 Code generator for the Daml ledger Rust bindings.

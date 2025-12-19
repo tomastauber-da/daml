@@ -4,10 +4,8 @@
 package com.digitalasset.daml.lf.codegen
 
 import java.nio.file.{Files, Path}
-
-import scala.collection.immutable.Map
-
-import com.digitalasset.daml.lf.archive.DarParser
+//import scala.collection.immutable.Map
+import com.digitalasset.daml.lf.archive.{DamlLf, DarParser}
 import com.digitalasset.daml.lf.data.Ref._
 import com.digitalasset.daml.lf.language.Ast
 import com.digitalasset.daml.lf.typesig.reader.DamlLfArchiveReader
@@ -31,17 +29,7 @@ object RustCodeGen extends StrictLogging {
             throw new RuntimeException(s"Failed to read DAR file $darPath: $err")
           },
           dar => {
-            val packages = dar.all.map { case (hash, archive) =>
-              val packageId = PackageId.assertFromString(hash)
-              DamlLfArchiveReader(packageId, archive) match {
-                case -\/(err) =>
-                  logger.error(s"Failed to read package $packageId: $err")
-                  throw new RuntimeException(s"Failed to read package $packageId: $err")
-                case \/-(pkg) =>
-                  logger.info(s"Successfully loaded package: ${pkg.metadata.name}-${pkg.metadata.version}")
-                  (packageId, pkg)
-              }
-            }
+            val packages = dar.all.map(tryDecodeArchive)
             packages
           },
         )
@@ -54,7 +42,7 @@ object RustCodeGen extends StrictLogging {
 
     // Generate Rust code for each package
     allPackages.foreach { case (packageId, packageSig) =>
-      generatePackage(conf.outputDirectory, packageId, packageSig, allPackages)
+      generatePackage(conf.outputDirectory, packageId, packageSig/*, allPackages*/)
     }
 
     // Generate a lib.rs file that includes all modules
@@ -63,13 +51,22 @@ object RustCodeGen extends StrictLogging {
     logger.info("Rust code generation completed successfully")
   }
 
+  private def tryDecodeArchive(archive: DamlLf.Archive): (PackageId, Ast.PackageSignature) = {
+    DamlLfArchiveReader.readPackage(archive) match {
+      case -\/(error) => throw new RuntimeException(error)
+      case \/-(result @ (packageId, _)) =>
+        logger.trace(s"Daml-LF Archive decoded, packageId '$packageId'")
+        result
+    }
+  }
+
   private def generatePackage(
       outputDir: Path,
       packageId: PackageId,
       packageSig: Ast.PackageSignature,
-      allPackages: Map[PackageId, Ast.PackageSignature],
+      //allPackages: Map[PackageId, Ast.PackageSignature],
   ): Unit = {
-    logger.info(s"Generating Rust code for package: ${packageSig.metadata.name}")
+    logger.info(s"Generating Rust code for package: ${packageSig.metadata.name} (package ID: $packageId)")
 
     // Create a directory for this package
     val packageDir = outputDir.resolve(sanitizePackageName(packageSig.metadata.name))
@@ -88,10 +85,10 @@ object RustCodeGen extends StrictLogging {
 
     // Generate a mod.rs file for the package
     val modContent = generatePackageModFile(packageSig)
-    Files.write(packageDir.resolve("mod.rs"), modContent.getBytes)
+    val _ = Files.write(packageDir.resolve("mod.rs"), modContent.getBytes)
   }
 
-  private def generateModuleStub(moduleName: ModuleName, module: Ast.Module): String = {
+  private def generateModuleStub(moduleName: ModuleName, module: Ast.ModuleSignature): String = {
     val sb = new StringBuilder
     sb.append(s"// Rust bindings for Daml module: $moduleName\n")
     sb.append("// This is a generated file - do not edit manually\n\n")
@@ -100,8 +97,8 @@ object RustCodeGen extends StrictLogging {
     // Add a placeholder comment about what would be generated
     sb.append("// TODO: Generate Rust types for:\n")
     sb.append(s"// - ${module.templates.size} template(s)\n")
-    sb.append(s"// - ${module.dataTypes.size} data type(s)\n")
-    sb.append(s"// - ${module.values.size} value(s)\n")
+    sb.append(s"// - ${module.interfaces.size} interface(s)\n")
+    sb.append(s"// - ${module.definitions.size} definition(s)\n")
     sb.append("\n")
     
     sb.toString()
@@ -132,11 +129,11 @@ object RustCodeGen extends StrictLogging {
       sb.append(s"pub mod $pkgName;\n")
     }
     
-    Files.write(outputDir.resolve("lib.rs"), sb.toString().getBytes)
+    val _ = Files.write(outputDir.resolve("lib.rs"), sb.toString().getBytes)
   }
 
   private def sanitizePackageName(name: PackageName): String = {
-    val sanitized = name.toString()
+    val sanitized = name
       .toLowerCase()
       .replaceAll("[^a-z0-9_]", "_")
     // Prepend underscore if starts with digit
