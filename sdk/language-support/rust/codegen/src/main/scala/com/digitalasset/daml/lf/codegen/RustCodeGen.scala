@@ -42,7 +42,7 @@ object RustCodeGen extends StrictLogging {
 
     // Generate Rust code for each package
     allPackages.foreach { case (packageId, packageSig) =>
-      generatePackage(conf.outputDirectory, packageId, packageSig/*, allPackages*/)
+      generatePackage(conf.outputDirectory, packageId, packageSig /*, allPackages*/ )
     }
 
     // Generate a lib.rs file that includes all modules
@@ -64,9 +64,11 @@ object RustCodeGen extends StrictLogging {
       outputDir: Path,
       packageId: PackageId,
       packageSig: Ast.PackageSignature,
-      //allPackages: Map[PackageId, Ast.PackageSignature],
+      // allPackages: Map[PackageId, Ast.PackageSignature],
   ): Unit = {
-    logger.info(s"Generating Rust code for package: ${packageSig.metadata.name} (package ID: $packageId)")
+    logger.info(
+      s"Generating Rust code for package: ${packageSig.metadata.name} (package ID: $packageId)"
+    )
 
     // Create a directory for this package
     val packageDir = outputDir.resolve(sanitizePackageName(packageSig.metadata.name))
@@ -93,14 +95,14 @@ object RustCodeGen extends StrictLogging {
     sb.append(s"// Rust bindings for Daml module: $moduleName\n")
     sb.append("// This is a generated file - do not edit manually\n\n")
     sb.append("use serde::{Deserialize, Serialize};\n\n")
-    
+
     // Add a placeholder comment about what would be generated
     sb.append("// TODO: Generate Rust types for:\n")
     sb.append(s"// - ${module.templates.size} template(s)\n")
     sb.append(s"// - ${module.interfaces.size} interface(s)\n")
     sb.append(s"// - ${module.definitions.size} definition(s)\n")
     sb.append("\n")
-    
+
     sb.toString()
   }
 
@@ -108,27 +110,30 @@ object RustCodeGen extends StrictLogging {
     val sb = new StringBuilder
     sb.append(s"// Package: ${packageSig.metadata.name}\n")
     sb.append(s"// Version: ${packageSig.metadata.version}\n\n")
-    
+
     packageSig.modules.foreach { case (moduleName, module) =>
       if (!module.isUtilityModule) {
         val modName = sanitizeModuleName(moduleName.toString())
         sb.append(s"pub mod $modName;\n")
       }
     }
-    
+
     sb.toString()
   }
 
-  private def generateLibFile(outputDir: Path, allPackages: Map[PackageId, Ast.PackageSignature]): Unit = {
+  private def generateLibFile(
+      outputDir: Path,
+      allPackages: Map[PackageId, Ast.PackageSignature],
+  ): Unit = {
     val sb = new StringBuilder
     sb.append("// Daml Rust Bindings\n")
     sb.append("// This is a generated file - do not edit manually\n\n")
-    
+
     allPackages.values.foreach { packageSig =>
       val pkgName = sanitizePackageName(packageSig.metadata.name)
       sb.append(s"pub mod $pkgName;\n")
     }
-    
+
     val _ = Files.write(outputDir.resolve("lib.rs"), sb.toString().getBytes)
   }
 
