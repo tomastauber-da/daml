@@ -9,11 +9,10 @@ import com.digitalasset.daml.lf.language.Util
 
 private object TypeGen {
 
-  /**
-   * Generates the Rust type signature for a given Daml AST type.
-   * Assumes the existence of a `daml_types` crate or module containing
-   * standard wrapper types (Party, ContractId, etc.).
-   */
+  /** Generates the Rust type signature for a given Daml AST type.
+    * Assumes the existence of a `daml_types` crate or module containing
+    * standard wrapper types (Party, ContractId, etc.).
+    */
   def renderType(currentModule: ModuleId, tpe: Ast.Type): String = {
     def rec(tpe: Ast.Type): String =
       tpe match {
@@ -73,9 +72,8 @@ private object TypeGen {
     rec(tpe)
   }
 
-  /**
-   * Resolves the Rust path to a Type Constructor (Template or Record).
-   */
+  /** Resolves the Rust path to a Type Constructor (Template or Record).
+    */
   def renderTypeCon(currentModule: ModuleId, typeCon: TypeConId): String = {
     // Rust uses `::` for namespace separation.
     // We assume external packages are mapped to `crate::pkg_{ID}::...`

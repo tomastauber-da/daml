@@ -58,11 +58,11 @@ object RustCodeGen extends StrictLogging {
   }
 
   private def generatePackage(
-                               outputDir: Path,
-                               packageId: PackageId,
-                               packageSig: Ast.PackageSignature,
-                               damlVersion: String
-                             ): Unit = {
+      outputDir: Path,
+      packageId: PackageId,
+      packageSig: Ast.PackageSignature,
+      damlVersion: String,
+  ): Unit = {
     logger.info(
       s"Generating Rust code for package: ${packageSig.metadata.name} (package ID: $packageId)"
     )
@@ -77,7 +77,12 @@ object RustCodeGen extends StrictLogging {
       if (!module.isUtilityModule) {
         val moduleFileName = sanitizeModuleName(moduleName.toString()) + ".rs"
         val moduleFile = packageDir.resolve(moduleFileName)
-        val moduleContent = generateModule(ModuleId(packageId, moduleName), packageSig.metadata.name, module, damlVersion)
+        val moduleContent = generateModule(
+          ModuleId(packageId, moduleName),
+          packageSig.metadata.name,
+          module,
+          damlVersion,
+        )
         Files.write(moduleFile, moduleContent.getBytes)
         logger.debug(s"Generated module file: $moduleFile")
       }
@@ -89,11 +94,11 @@ object RustCodeGen extends StrictLogging {
   }
 
   private def generateModule(
-                              moduleId: ModuleId,
-                              packageName: PackageName,
-                              module: Ast.ModuleSignature,
-                              damlVersion: String
-                            ): String = {
+      moduleId: ModuleId,
+      packageName: PackageName,
+      module: Ast.ModuleSignature,
+      damlVersion: String,
+  ): String = {
     // 1. Partition Definitions
     val (topLevelDefinitions, nestedDefinitions) =
       module.serializableDefinitions.partition { case (name, _) => name.segments.length == 1 }
@@ -137,12 +142,12 @@ object RustCodeGen extends StrictLogging {
   }
 
   private def genTemplate(
-                           moduleId: ModuleId,
-                           packageName: PackageName,
-                           templateName: Name,
-                           templateSig: Ast.TemplateSignature,
-                           dataDef: Ast.DDataType,
-                         ): Seq[DefGen] = {
+      moduleId: ModuleId,
+      packageName: PackageName,
+      templateName: Name,
+      templateSig: Ast.TemplateSignature,
+      dataDef: Ast.DDataType,
+  ): Seq[DefGen] = {
     // 1. Generate the Struct/Enum for the template payload
     val paramNames = dataDef.params.toSeq.map { case (name, _) => name }
     val typeCon = TypeConGen(moduleId, templateName, paramNames, dataDef.cons)
@@ -161,23 +166,21 @@ object RustCodeGen extends StrictLogging {
       templateName,
       templateSig.key.map(_.typ), // Pass the AST Type, not a Decoder
       choices,
-      templateSig.implements.values.toSeq.map(_.interfaceId)
+      templateSig.implements.values.toSeq.map(_.interfaceId),
     )
 
     // 4. Handle Key namespace if necessary (optional in Rust, but good for aliases)
-    val namespaceOpt = templateSig.key.map(k =>
-      TemplateNamespaceGen(moduleId, templateName, k.typ)
-    )
+    val namespaceOpt = templateSig.key.map(k => TemplateNamespaceGen(moduleId, templateName, k.typ))
 
     Seq(typeCon, template) ++ namespaceOpt
   }
 
   private def genDataDef(
-                          moduleId: ModuleId,
-                          dataConName: Name,
-                          dataDef: Ast.DDataType,
-                          nestedDefinitions: Seq[(DottedName, Ast.DDataType)],
-                        ): Seq[DefGen] = {
+      moduleId: ModuleId,
+      dataConName: Name,
+      dataDef: Ast.DDataType,
+      nestedDefinitions: Seq[(DottedName, Ast.DDataType)],
+  ): Seq[DefGen] = {
     val paramNames = dataDef.params.toSeq.map { case (name, _) => name }
 
     // 1. Main Type Definition
@@ -203,11 +206,11 @@ object RustCodeGen extends StrictLogging {
   }
 
   private def genInterface(
-                            moduleId: ModuleId,
-                            packageName: PackageName,
-                            interfaceName: DottedName,
-                            interface: Ast.DefInterfaceSignature,
-                          ): DefGen = {
+      moduleId: ModuleId,
+      packageName: PackageName,
+      interfaceName: DottedName,
+      interface: Ast.DefInterfaceSignature,
+  ): DefGen = {
     // Interfaces usually have a View type associated
     val viewId = interface.view match {
       case Ast.TTyCon(tycon) => tycon
@@ -240,9 +243,9 @@ object RustCodeGen extends StrictLogging {
   }
 
   private def generateLibFile(
-                               outputDir: Path,
-                               allPackages: Map[PackageId, Ast.PackageSignature],
-                             ): Unit = {
+      outputDir: Path,
+      allPackages: Map[PackageId, Ast.PackageSignature],
+  ): Unit = {
     val sb = new StringBuilder
     sb.append("// Daml Rust Bindings\n")
     sb.append("// This is a generated file - do not edit manually\n\n")

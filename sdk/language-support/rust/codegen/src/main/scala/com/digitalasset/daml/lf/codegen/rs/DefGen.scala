@@ -6,19 +6,17 @@ package com.digitalasset.daml.lf.codegen.rs
 import com.digitalasset.daml.lf.data.Ref._
 import com.digitalasset.daml.lf.language.Ast
 
-/**
- * Base trait for Rust definition generators.
- * Unlike TS/JS, we only have one render phase per definition.
- */
+/** Base trait for Rust definition generators.
+  * Unlike TS/JS, we only have one render phase per definition.
+  */
 private[codegen] sealed trait DefGen {
   def renderRust(b: CodeBuilder): Unit
 }
 
-/**
- * Generates a Rust module (mod).
- */
+/** Generates a Rust module (mod).
+  */
 private[codegen] final case class NamespaceGen(name: Name, definitions: Seq[DefGen])
-  extends DefGen {
+    extends DefGen {
   override def renderRust(b: CodeBuilder): Unit = {
     // Rust modules are snake_case.
     // We assume 'name' is the Daml module name (CamelCase), so we lower-case it.
@@ -37,19 +35,18 @@ private[codegen] final case class NamespaceGen(name: Name, definitions: Seq[DefG
   }
 }
 
-/**
- * Generates the `impl Template` block.
- * Note: The actual struct definition for the Template payload is handled by TypeConGen.
- */
+/** Generates the `impl Template` block.
+  * Note: The actual struct definition for the Template payload is handled by TypeConGen.
+  */
 private[codegen] final case class TemplateGen(
-                                               moduleId: ModuleId,
-                                               packageName: PackageName,
-                                               name: Name,
-                                               // Decoders/Encoders removed - Serde handles this.
-                                               keyTypeOpt: Option[Ast.Type], // We need the Type, not the Decoder
-                                               choices: Seq[ChoiceGen],
-                                               implements: Seq[TypeConId],
-                                             ) extends DefGen {
+    moduleId: ModuleId,
+    packageName: PackageName,
+    name: Name,
+    // Decoders/Encoders removed - Serde handles this.
+    keyTypeOpt: Option[Ast.Type], // We need the Type, not the Decoder
+    choices: Seq[ChoiceGen],
+    implements: Seq[TypeConId],
+) extends DefGen {
 
   private val templateId = s"${moduleId.pkg}:${moduleId.moduleName}:$name"
 
@@ -72,14 +69,13 @@ private[codegen] final case class TemplateGen(
   }
 }
 
-/**
- * Handles Template Keys defined in separate namespaces (if applicable).
- */
+/** Handles Template Keys defined in separate namespaces (if applicable).
+  */
 private[codegen] final case class TemplateNamespaceGen(
-                                                        moduleId: ModuleId,
-                                                        name: Name,
-                                                        key: Ast.Type,
-                                                      ) extends DefGen {
+    moduleId: ModuleId,
+    name: Name,
+    key: Ast.Type,
+) extends DefGen {
   override def renderRust(b: CodeBuilder): Unit = {
     // In Rust, we might just define a type alias if strictly necessary,
     // but usually the Key type is defined in the impl block.
@@ -89,15 +85,14 @@ private[codegen] final case class TemplateNamespaceGen(
   }
 }
 
-/**
- * Generates the main Data Types (Structs and Enums).
- */
+/** Generates the main Data Types (Structs and Enums).
+  */
 private[codegen] final case class TypeConGen(
-                                              moduleId: ModuleId,
-                                              name: Name,
-                                              paramNames: Seq[Ast.TypeVarName],
-                                              cons: Ast.DataCons,
-                                            ) extends DefGen {
+    moduleId: ModuleId,
+    name: Name,
+    paramNames: Seq[Ast.TypeVarName],
+    cons: Ast.DataCons,
+) extends DefGen {
 
   override def renderRust(b: CodeBuilder): Unit = {
     b.addEmptyLine()
@@ -139,14 +134,13 @@ private[codegen] final case class TypeConGen(
   }
 }
 
-/**
- * Generates Choice Structs and Implementations.
- */
+/** Generates Choice Structs and Implementations.
+  */
 private[codegen] final case class ChoiceGen(
-                                             name: Name,
-                                             argType: Ast.Type,
-                                             returnType: Ast.Type
-                                           ) {
+    name: Name,
+    argType: Ast.Type,
+    returnType: Ast.Type,
+) {
 
   def renderRust(moduleId: ModuleId, templateName: Name, b: CodeBuilder): Unit = {
     val choiceStructName = name // The choice name itself is usually unique within the module scope
@@ -184,12 +178,12 @@ private[codegen] final case class ChoiceGen(
 // Interfaces are usually handled by generating a Marker trait or specific logic.
 // For this snippet, we will stub it out or treat it similarly to Templates.
 private[codegen] final case class InterfaceGen(
-                                                moduleId: ModuleId,
-                                                packageName: PackageName,
-                                                name: String,
-                                                choices: Seq[ChoiceGen],
-                                                view: TypeConId,
-                                              ) extends DefGen {
+    moduleId: ModuleId,
+    packageName: PackageName,
+    name: String,
+    choices: Seq[ChoiceGen],
+    view: TypeConId,
+) extends DefGen {
 
   override def renderRust(b: CodeBuilder): Unit = {
     // Generate a Trait for the Interface
