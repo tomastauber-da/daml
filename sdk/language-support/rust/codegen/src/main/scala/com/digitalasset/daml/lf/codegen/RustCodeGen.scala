@@ -149,7 +149,6 @@ object RustCodeGen extends StrictLogging {
     name
       .toLowerCase()
       .replaceAll("[^a-z0-9_]", "_")
-      .replaceAll("\\.", "_")
       .replaceAll("^[0-9]", "_")
   }
 }

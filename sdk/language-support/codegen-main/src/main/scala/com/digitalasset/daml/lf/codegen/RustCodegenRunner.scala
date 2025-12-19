@@ -5,7 +5,6 @@ package com.digitalasset.daml.lf.codegen
 
 import ch.qos.logback.classic.Level
 import com.daml.assistant.config.{ConfigLoadingError, PackageConfig}
-import io.circe.ACursor
 import scopt.OptionParser
 
 object RustCodegenRunner extends CodegenRunner {
