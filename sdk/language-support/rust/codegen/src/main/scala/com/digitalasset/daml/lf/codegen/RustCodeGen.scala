@@ -12,12 +12,9 @@ import com.digitalasset.daml.lf.data.Ref._
 import com.digitalasset.daml.lf.language.Ast
 import com.digitalasset.daml.lf.typesig.reader.DamlLfArchiveReader
 import com.typesafe.scalalogging.StrictLogging
-import org.slf4j.LoggerFactory
 import scalaz.{-\/, \/-}
 
 object RustCodeGen extends StrictLogging {
-
-  private val log = LoggerFactory.getLogger(getClass)
 
   def run(conf: RustCodeGenConf, damlVersion: String): Unit = {
     logger.info(s"Rust codegen running with config: $conf")
@@ -142,13 +139,13 @@ object RustCodeGen extends StrictLogging {
     name.toString()
       .toLowerCase()
       .replaceAll("[^a-z0-9_]", "_")
-      .replaceAll("^[0-9]", "_")
+      .replaceAll("^[0-9]+", "_")
   }
 
   private def sanitizeModuleName(name: String): String = {
     name
       .toLowerCase()
       .replaceAll("[^a-z0-9_]", "_")
-      .replaceAll("^[0-9]", "_")
+      .replaceAll("^[0-9]+", "_")
   }
 }
