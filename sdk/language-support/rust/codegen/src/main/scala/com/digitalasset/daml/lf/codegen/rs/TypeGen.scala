@@ -3,7 +3,7 @@
 
 package com.digitalasset.daml.lf.codegen.rs
 
-import com.digitalasset.daml.lf.data.Ref.{ModuleId, QualifiedName, TypeConId}
+import com.digitalasset.daml.lf.data.Ref._
 import com.digitalasset.daml.lf.language.Ast
 import com.digitalasset.daml.lf.language.Util
 
@@ -13,7 +13,11 @@ private object TypeGen {
     * Assumes the existence of a `daml_types` crate or module containing
     * standard wrapper types (Party, ContractId, etc.).
     */
-  def renderType(currentModule: ModuleId, tpe: Ast.Type): String = {
+  def renderType(
+                  currentModule: ModuleId,
+                  tpe: Ast.Type,
+                  pkgIdToName: Map[PackageId, String]
+                ): String = {
     def rec(tpe: Ast.Type): String =
       tpe match {
         // Generic Type Variables (e.g., T)
@@ -55,7 +59,7 @@ private object TypeGen {
         case Util.TUpdate(_) => error("Update not serializable")
 
         case Util.TTyConApp(tcon, targs) =>
-          val renderTCon = renderTypeCon(currentModule, tcon)
+          val renderTCon = renderTypeCon(currentModule, tcon, pkgIdToName)
           if (targs.isEmpty) renderTCon
           else s"$renderTCon<${targs.toSeq.map(rec).mkString(", ")}>"
 
@@ -74,20 +78,25 @@ private object TypeGen {
 
   /** Resolves the Rust path to a Type Constructor (Template or Record).
     */
-  def renderTypeCon(currentModule: ModuleId, typeCon: TypeConId): String = {
-    // Rust uses `::` for namespace separation.
-    // We assume external packages are mapped to `crate::pkg_{ID}::...`
-    // or similar patterns.
-
+  def renderTypeCon(currentModule: ModuleId, typeCon: TypeConId, pkgIdToName: Map[PackageId, String]): String = {
     if (currentModule.pkg != typeCon.pkg) {
-      // Reference to a type in an external package
-      s"crate::pkg_${typeCon.pkg}::${pathName(typeCon.qualifiedName)}"
+      // External Package Resolution
+      val pkgName = pkgIdToName.get(typeCon.pkg) match {
+        case Some(name) => name // e.g. "daml_stdlib" or "ghc_prim"
+        case None =>
+          // Fallback if package is missing (shouldn't happen if DAR is complete)
+          // Or throw exception
+          s"pkg_${typeCon.pkg}"
+      }
+
+      // Result: crate::package_name::module::Type
+      s"crate::$pkgName::${pathName(typeCon.qualifiedName)}"
+
     } else if (currentModule.moduleName != typeCon.qualifiedName.module) {
-      // Reference to a type in the same package but different module.
-      // We use `crate::` (absolute path) to be safe and avoid relative path hell.
+      // Same Package, Different Module
       s"crate::${pathName(typeCon.qualifiedName)}"
     } else {
-      // Reference to a type in the current module
+      // Same Module
       typeCon.qualifiedName.name.dottedName
     }
   }

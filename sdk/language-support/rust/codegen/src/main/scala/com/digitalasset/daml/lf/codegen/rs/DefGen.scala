@@ -46,13 +46,14 @@ private[codegen] final case class TemplateGen(
     keyTypeOpt: Option[Ast.Type], // We need the Type, not the Decoder
     choices: Seq[ChoiceGen],
     implements: Seq[TypeConId],
+    pkgIdToName: Map[PackageId, String]
 ) extends DefGen {
 
   private val templateId = s"${moduleId.pkg}:${moduleId.moduleName}:$name"
 
   override def renderRust(b: CodeBuilder): Unit = {
     val keyType = keyTypeOpt
-      .map(t => TypeGen.renderType(moduleId, t))
+      .map(t => TypeGen.renderType(moduleId, t, pkgIdToName))
       .getOrElse("()") // Unit if no key
 
     b.addEmptyLine()
@@ -75,12 +76,13 @@ private[codegen] final case class TemplateNamespaceGen(
     moduleId: ModuleId,
     name: Name,
     key: Ast.Type,
-) extends DefGen {
+    pkgIdToName: Map[PackageId, String]
+                                                      ) extends DefGen {
   override def renderRust(b: CodeBuilder): Unit = {
     // In Rust, we might just define a type alias if strictly necessary,
     // but usually the Key type is defined in the impl block.
     // We can emit a helper type alias if beneficial.
-    val keyType = TypeGen.renderType(moduleId, key)
+    val keyType = TypeGen.renderType(moduleId, key, pkgIdToName)
     b.addLine(s"pub type ${name}Key = $keyType;")
   }
 }
@@ -92,7 +94,8 @@ private[codegen] final case class TypeConGen(
     name: Name,
     paramNames: Seq[Ast.TypeVarName],
     cons: Ast.DataCons,
-) extends DefGen {
+    pkgIdToName: Map[PackageId, String]
+                                            ) extends DefGen {
 
   override def renderRust(b: CodeBuilder): Unit = {
     b.addEmptyLine()
@@ -108,7 +111,7 @@ private[codegen] final case class TypeConGen(
       case Ast.DataRecord(fields) =>
         b.addBlock(s"pub struct $name$typeParams {", "}") {
           fields.foreach { case (fieldName, tpe) =>
-            b.addLine(s"pub $fieldName: ${TypeGen.renderType(moduleId, tpe)},")
+            b.addLine(s"pub $fieldName: ${TypeGen.renderType(moduleId, tpe, pkgIdToName)},")
           }
         }
 
@@ -116,7 +119,7 @@ private[codegen] final case class TypeConGen(
         b.addBlock(s"pub enum $name$typeParams {", "}") {
           variants.foreach { case (variantName, tpe) =>
             // Rust Enum Variants with data
-            b.addLine(s"$variantName(${TypeGen.renderType(moduleId, tpe)}),")
+            b.addLine(s"$variantName(${TypeGen.renderType(moduleId, tpe, pkgIdToName)}),")
           }
         }
 
@@ -137,35 +140,35 @@ private[codegen] final case class TypeConGen(
 /** Generates Choice Structs and Implementations.
   */
 private[codegen] final case class ChoiceGen(
-    name: Name,
-    argType: Ast.Type,
-    returnType: Ast.Type,
-) {
+                                             name: Name,
+                                             argType: Ast.Type,
+                                             returnType: Ast.Type,
+                                             pkgIdToName: Map[PackageId, String]
+
+                                           ) {
 
   def renderRust(moduleId: ModuleId, templateName: Name, b: CodeBuilder): Unit = {
-    val choiceStructName = name // The choice name itself is usually unique within the module scope
-    val argTypeStr = TypeGen.renderType(moduleId, argType)
-    val retTypeStr = TypeGen.renderType(moduleId, returnType)
+    val argTypeStr = TypeGen.renderType(moduleId, argType, pkgIdToName)
+    val retTypeStr = TypeGen.renderType(moduleId, returnType, pkgIdToName)
+
+    // Check if the argument type name matches the choice name.
+    // Note: We strip potential generic params or module prefixes for strict name comparison if needed,
+    // but usually exact string match is sufficient for local types.
+    val isRedundantWrapper = argTypeStr == name
 
     b.addEmptyLine()
-    // 1. Define the Choice Payload Struct
-    // Note: If the argument type is Unit (empty record), we still generate a struct
-    // or we alias it. Usually safest to generate a struct for Serde.
 
-    b.addLine("#[derive(Debug, Clone, Serialize, Deserialize)]")
-    b.addLine("#[serde(rename_all = \"camelCase\")]")
+    if (!isRedundantWrapper) {
+      // Only generate the wrapper struct if the names differ (e.g., choice takes a primitive Int)
+      b.addLine("#[derive(Debug, Clone, Serialize, Deserialize)]")
+      b.addLine("#[serde(rename_all = \"camelCase\")]")
+      b.addLine(s"pub struct $name(pub $argTypeStr);")
+    }
 
-    // Check if argType is a Record or strict primitive.
-    // For simplicity here, we wrap the argument type.
-    // In idiomatic Daml-Rust, generated choices often mirror the fields of the Daml choice.
-    // If 'argType' refers to a specific named record, we can use a type alias.
-    // If it is a built-in like Unit, we use a unit struct.
-
-    b.addLine(s"pub struct $choiceStructName(pub $argTypeStr);")
-
-    // 2. Implement the Choice Trait
+    // Implement the Choice Trait
+    // If isRedundantWrapper is true, we are implementing it on the existing payload struct.
     b.addEmptyLine()
-    b.addBlock(s"impl daml_types::Choice<$templateName> for $choiceStructName {", "}") {
+    b.addBlock(s"impl daml_types::Choice<$templateName> for $name {", "}") {
       b.addLine(s"type Return = $retTypeStr;")
 
       b.addBlock("fn name() -> &'static str {", "}") {
@@ -183,13 +186,14 @@ private[codegen] final case class InterfaceGen(
     name: String,
     choices: Seq[ChoiceGen],
     view: TypeConId,
+    pkgIdToName: Map[PackageId, String]
 ) extends DefGen {
 
   override def renderRust(b: CodeBuilder): Unit = {
     // Generate a Trait for the Interface
     b.addEmptyLine()
     b.addBlock(s"pub trait $name: daml_types::Template {", "}") {
-      b.addLine(s"// Interface view: ${TypeGen.renderType(moduleId, Ast.TTyCon(view))}")
+      b.addLine(s"// Interface view: ${TypeGen.renderType(moduleId, Ast.TTyCon(view), pkgIdToName)}")
     }
 
     // We might also generate the Choices associated with this Interface
