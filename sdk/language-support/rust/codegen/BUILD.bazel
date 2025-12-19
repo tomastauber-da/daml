@@ -51,7 +51,7 @@ da_scala_library(
 ########################################################
 copy_file(
     name = "binary",
-    src = "//language-support/rust/codegen:codegen_deploy.jar",
+    src = "//sdk/language-support/rust/codegen:codegen_deploy.jar",
     out = "binary.jar",
     allow_symlink = True,
     tags = ["maven_coordinates=com.daml:codegen-rust:__VERSION__"],
