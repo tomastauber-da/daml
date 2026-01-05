@@ -179,28 +179,44 @@ private[codegen] final case class ChoiceGen(
     val argTypeStr = TypeGen.renderType(moduleId, argType, pkgIdToName)
     val retTypeStr = TypeGen.renderType(moduleId, returnType, pkgIdToName)
 
-    // Check if the argument type name matches the choice name.
-    // Note: We strip potential generic params or module prefixes for strict name comparison if needed,
-    // but usually exact string match is sufficient for local types.
-    val isRedundantWrapper = argTypeStr == name
+    // The "Archive" choice is implicit on all templates.
+    // We cannot generate a "struct Archive" every time, or we get duplicate definitions.
+    // Instead, we implement the Choice trait directly on the external argument type
+    // (da::internal::template::Archive).
+    if (name == "Archive") {
+      b.addEmptyLine()
+      b.addBlock(s"impl daml_types::Choice<$templateName> for $argTypeStr {", "}") {
+        b.addLine(s"type Return = $retTypeStr;")
+        b.addBlock("fn name() -> &'static str {", "}") {
+          b.addLine(s""""$name"""")
+        }
+      }
+      // Stop here, do not generate a struct
+    } else {
 
-    b.addEmptyLine()
+      // Check if the argument type name matches the choice name.
+      // Note: We strip potential generic params or module prefixes for strict name comparison if needed,
+      // but usually exact string match is sufficient for local types.
+      val isRedundantWrapper = argTypeStr == name
 
-    if (!isRedundantWrapper) {
-      // Only generate the wrapper struct if the names differ (e.g., choice takes a primitive Int)
-      b.addLine("#[derive(Debug, Clone, Serialize, Deserialize)]")
-      b.addLine("#[serde(rename_all = \"camelCase\")]")
-      b.addLine(s"pub struct $name(pub $argTypeStr);")
-    }
+      b.addEmptyLine()
 
-    // Implement the Choice Trait
-    // If isRedundantWrapper is true, we are implementing it on the existing payload struct.
-    b.addEmptyLine()
-    b.addBlock(s"impl daml_types::Choice<$templateName> for $name {", "}") {
-      b.addLine(s"type Return = $retTypeStr;")
+      if (!isRedundantWrapper) {
+        // Only generate the wrapper struct if the names differ (e.g., choice takes a primitive Int)
+        b.addLine("#[derive(Debug, Clone, Serialize, Deserialize)]")
+        b.addLine("#[serde(rename_all = \"camelCase\")]")
+        b.addLine(s"pub struct $name(pub $argTypeStr);")
+      }
 
-      b.addBlock("fn name() -> &'static str {", "}") {
-        b.addLine(s""""$name"""")
+      // Implement the Choice Trait
+      // If isRedundantWrapper is true, we are implementing it on the existing payload struct.
+      b.addEmptyLine()
+      b.addBlock(s"impl daml_types::Choice<$templateName> for $name {", "}") {
+        b.addLine(s"type Return = $retTypeStr;")
+
+        b.addBlock("fn name() -> &'static str {", "}") {
+          b.addLine(s""""$name"""")
+        }
       }
     }
   }
