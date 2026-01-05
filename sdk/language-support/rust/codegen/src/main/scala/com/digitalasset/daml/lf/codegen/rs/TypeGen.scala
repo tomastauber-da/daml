@@ -21,7 +21,7 @@ private object TypeGen {
     def rec(tpe: Ast.Type): String =
       tpe match {
         // Generic Type Variables (e.g., T)
-        case Ast.TVar(name) => name
+        case Ast.TVar(name) => name.capitalize
 
         // --- Primitives ---
         // Unit in Rust is `()` or a specific struct if empty-object JSON is required.
@@ -84,32 +84,29 @@ private object TypeGen {
       pkgIdToName: Map[PackageId, String],
   ): String = {
     if (currentModule.pkg != typeCon.pkg) {
-      // External Package Resolution
-      val pkgName = pkgIdToName.get(typeCon.pkg) match {
-        case Some(name) => name // e.g. "daml_stdlib" or "ghc_prim"
-        case None =>
-          // Fallback if package is missing (shouldn't happen if DAR is complete)
-          // Or throw exception
-          s"pkg_${typeCon.pkg}"
-      }
+      // External Package
+      val pkgName = pkgIdToName.getOrElse(typeCon.pkg, s"pkg_${typeCon.pkg}")
 
-      // Result: crate::package_name::module::Type
-      s"crate::$pkgName::${pathName(typeCon.qualifiedName)}"
+      // FIX: Do not use the nested structure (da::internal::template).
+      // Use the flattened module name (da_internal_template) that matches the filename.
+      val flatModuleName = sanitizeModuleName(typeCon.qualifiedName.module.toString)
+
+      s"crate::$pkgName::$flatModuleName::${typeCon.qualifiedName.name}"
 
     } else if (currentModule.moduleName != typeCon.qualifiedName.module) {
-      // Same Package, Different Module
-      s"crate::${pathName(typeCon.qualifiedName)}"
+      // Local Package, different module
+      // Use flattened name here too
+      val flatModuleName = sanitizeModuleName(typeCon.qualifiedName.module.toString)
+      s"crate::$flatModuleName::${typeCon.qualifiedName.name}"
     } else {
       // Same Module
       typeCon.qualifiedName.name.dottedName
     }
   }
-
-  private def pathName(qualifiedName: QualifiedName): String = {
-    // Daml modules (My.Module) -> Rust modules (my::module)
-    // You might want to apply .toLowerCase to segments here for idiomatic Rust snake_case.
-    val modules = qualifiedName.module.segments.toSeq.map(_.toLowerCase).mkString("::")
-    s"${modules}::${qualifiedName.name}"
+  // Ensure this matches the logic in RustCodeGen.scala exactly
+  private def sanitizeModuleName(name: String): String = {
+    val sanitized = name.toLowerCase.replaceAll("[^a-z0-9_]", "_")
+    if (sanitized.matches("^[0-9].*")) s"_$sanitized" else sanitized
   }
 
   private def error(msg: String): Nothing = throw new RuntimeException("IMPOSSIBLE: " + msg)

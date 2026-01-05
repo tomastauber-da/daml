@@ -62,6 +62,7 @@ pub struct Party(pub String);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DamlInt(pub String);
 
+pub type Int = DamlInt;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DamlNumeric(pub String);
 
@@ -69,6 +70,15 @@ pub type DamlDecimal = DamlNumeric;
 pub type DamlText = String;
 pub type DamlDate = String; // format YYYY-MM-DD
 pub type DamlTime = String; // ISO 8601
+
+pub trait Data:
+    Clone + std::fmt::Debug + PartialEq + serde::Serialize + serde::de::DeserializeOwned
+{
+}
+impl<T: Clone + std::fmt::Debug + PartialEq + serde::Serialize + serde::de::DeserializeOwned> Data
+    for T
+{
+}
 
 /// Daml `ContractId T`.
 /// Uses PhantomData to prevent mixing IDs of different templates.

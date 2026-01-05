@@ -97,29 +97,58 @@ private[codegen] final case class TypeConGen(
     pkgIdToName: Map[PackageId, String],
 ) extends DefGen {
 
+  // Helper to detect recursion and wrap in Box<T>
+  private def renderFieldType(tpe: Ast.Type): String = {
+    val rustType = TypeGen.renderType(moduleId, tpe, pkgIdToName)
+
+    // Check if the field type is the same as the struct/enum we are currently generating.
+    // This is a naive check; for complex mutual recursion, we'd need a deeper analysis pass,
+    // but this covers 99% of Daml recursive types (lists/trees).
+    // Note: We strip generic parameters "<...>" for the name comparison.
+    val bareType = rustType.takeWhile(_ != '<')
+
+    if (bareType == name) s"Box<$rustType>" else rustType
+  }
+
   override def renderRust(b: CodeBuilder): Unit = {
     b.addEmptyLine()
 
     // Generics handling: <A, B>
-    val typeParams = if (paramNames.isEmpty) "" else s"<${paramNames.mkString(", ")}>"
+    val typeParams =
+      if (paramNames.isEmpty) ""
+      else {
+        val paramsWithBounds = paramNames.map { p =>
+          val upperP = p.capitalize
+          s"$upperP: daml_types::Data + serde::Serialize + serde::de::DeserializeOwned"
+        }
+        s"<${paramsWithBounds.mkString(", ")}>"
+      }
 
     // Add Serde attributes
     b.addLine("#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]")
     b.addLine("#[serde(rename_all = \"camelCase\")]") // Daml JSON API uses camelCase
 
+    if (paramNames.nonEmpty) {
+      val boundStr = paramNames
+        .map { p =>
+          s"${p.capitalize}: daml_types::Data + serde::Serialize + serde::de::DeserializeOwned"
+        }
+        .mkString(", ")
+      b.addLine(s"""#[serde(bound = "$boundStr")]""")
+    }
+
     cons match {
       case Ast.DataRecord(fields) =>
         b.addBlock(s"pub struct $name$typeParams {", "}") {
           fields.foreach { case (fieldName, tpe) =>
-            b.addLine(s"pub $fieldName: ${TypeGen.renderType(moduleId, tpe, pkgIdToName)},")
+            b.addLine(s"pub $fieldName: ${renderFieldType(tpe)},")
           }
         }
 
       case Ast.DataVariant(variants) =>
         b.addBlock(s"pub enum $name$typeParams {", "}") {
           variants.foreach { case (variantName, tpe) =>
-            // Rust Enum Variants with data
-            b.addLine(s"$variantName(${TypeGen.renderType(moduleId, tpe, pkgIdToName)}),")
+            b.addLine(s"$variantName(${renderFieldType(tpe)}),")
           }
         }
 
