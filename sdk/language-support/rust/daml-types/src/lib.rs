@@ -65,6 +65,7 @@ pub struct DamlInt(pub String);
 pub type Int = DamlInt;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DamlNumeric(pub String);
+pub type Numeric = DamlNumeric;
 
 pub type DamlDecimal = DamlNumeric;
 pub type DamlText = String;
@@ -82,12 +83,28 @@ impl<T: Clone + std::fmt::Debug + PartialEq + serde::Serialize + serde::de::Dese
 
 /// Daml `ContractId T`.
 /// Uses PhantomData to prevent mixing IDs of different templates.
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub struct ContractId<T>(pub String, PhantomData<T>);
+#[derive(PartialEq, Eq, Hash)]
+pub struct ContractId<T: ?Sized>(pub String, PhantomData<T>);
+
+impl<T> ContractId<T> {
+    /// Casts this ContractId to another type (e.g. an Interface).
+    /// This is a phantom cast; strictly safe at runtime (it's just a string),
+    /// but validity depends on the Daml model.
+    pub fn cast<U>(self) -> ContractId<U> {
+        ContractId(self.0, std::marker::PhantomData)
+    }
+}
 
 impl<T> Clone for ContractId<T> {
     fn clone(&self) -> Self {
         ContractId(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T: ?Sized> std::fmt::Debug for ContractId<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // We only print the ID string, ignoring T
+        f.debug_tuple("ContractId").field(&self.0).finish()
     }
 }
 
@@ -151,18 +168,29 @@ where
 // 2. Traits (Replacing Companion Objects)
 // ==============================================================================
 
+pub trait DamlType {
+    fn type_id() -> &'static str;
+}
+
 /// A trait representing a Daml Template.
 /// T corresponds to the payload struct.
-pub trait Template: Serialize + DeserializeOwned + Sized {
-    /// The unique template ID string (e.g. "PackageId:Module:Name")
-    fn template_id() -> &'static str;
+pub trait Template: DamlType {
+    type Key;
+    fn template_id() -> &'static str {
+        Self::type_id()
+    }
+}
 
-    /// The key type. Use `()` (Unit) if no key exists.
-    type Key: Serialize + DeserializeOwned;
+/// Trait implemented by generated Marker Structs for Interfaces
+pub trait Interface: DamlType {
+    type View;
+    fn interface_id() -> &'static str {
+        Self::type_id()
+    }
 }
 
 /// A trait representing a Choice on a Template.
-pub trait Choice<T: Template>: Serialize + DeserializeOwned {
+pub trait Choice<T: DamlType>: Serialize + DeserializeOwned {
     /// The return type of the choice.
     type Return: DeserializeOwned;
 
@@ -203,11 +231,13 @@ mod tests {
     }
 
     // 2. Implement Template Trait
-    impl Template for Iou {
-        type Key = (); // No key for this example
-        fn template_id() -> &'static str {
+    impl DamlType for Iou {
+        fn type_id() -> &'static str {
             "d14e08...:Main:Iou"
         }
+    }
+    impl Template for Iou {
+        type Key = ();
     }
 
     // 3. Define a Choice

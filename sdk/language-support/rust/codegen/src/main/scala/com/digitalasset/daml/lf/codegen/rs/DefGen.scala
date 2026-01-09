@@ -57,16 +57,19 @@ private[codegen] final case class TemplateGen(
       .getOrElse("()") // Unit if no key
 
     b.addEmptyLine()
-    b.addBlock(s"impl daml_types::Template for $name {", "}") {
-      b.addLine(s"type Key = $keyType;")
-
-      b.addBlock("fn template_id() -> &'static str {", "}") {
+    b.addBlock(s"impl daml_types::DamlType for $name {", "}") {
+      b.addBlock("fn type_id() -> &'static str {", "}") {
         b.addLine(s""""$templateId"""")
       }
     }
 
+    b.addEmptyLine()
+    b.addBlock(s"impl daml_types::Template for $name {", "}") {
+      b.addLine(s"type Key = $keyType;")
+    }
+
     // Render the choices associated with this template
-    choices.foreach(_.renderRust(moduleId, name, b))
+    choices.foreach(_.renderRust(moduleId, Left(name), b))
   }
 }
 
@@ -175,9 +178,18 @@ private[codegen] final case class ChoiceGen(
     pkgIdToName: Map[PackageId, String],
 ) {
 
-  def renderRust(moduleId: ModuleId, templateName: Name, b: CodeBuilder): Unit = {
+  def renderRust(
+      moduleId: ModuleId,
+      templateNameOrInterfaceName: Either[Name, String],
+      b: CodeBuilder,
+  ): Unit = {
     val argTypeStr = TypeGen.renderType(moduleId, argType, pkgIdToName)
     val retTypeStr = TypeGen.renderType(moduleId, returnType, pkgIdToName)
+
+    val choiceParentName = templateNameOrInterfaceName match {
+      case Left(n) => n.toString
+      case Right(n) => n
+    }
 
     // The "Archive" choice is implicit on all templates.
     // We cannot generate a "struct Archive" every time, or we get duplicate definitions.
@@ -185,7 +197,7 @@ private[codegen] final case class ChoiceGen(
     // (da::internal::template::Archive).
     if (name == "Archive") {
       b.addEmptyLine()
-      b.addBlock(s"impl daml_types::Choice<$templateName> for $argTypeStr {", "}") {
+      b.addBlock(s"impl daml_types::Choice<$choiceParentName> for $argTypeStr {", "}") {
         b.addLine(s"type Return = $retTypeStr;")
         b.addBlock("fn name() -> &'static str {", "}") {
           b.addLine(s""""$name"""")
@@ -211,7 +223,7 @@ private[codegen] final case class ChoiceGen(
       // Implement the Choice Trait
       // If isRedundantWrapper is true, we are implementing it on the existing payload struct.
       b.addEmptyLine()
-      b.addBlock(s"impl daml_types::Choice<$templateName> for $name {", "}") {
+      b.addBlock(s"impl daml_types::Choice<$choiceParentName> for $name {", "}") {
         b.addLine(s"type Return = $retTypeStr;")
 
         b.addBlock("fn name() -> &'static str {", "}") {
@@ -234,19 +246,35 @@ private[codegen] final case class InterfaceGen(
 ) extends DefGen {
 
   override def renderRust(b: CodeBuilder): Unit = {
-    // Generate a Trait for the Interface
+    // 1. Resolve the View Type
+    val viewType = TypeGen.renderType(moduleId, Ast.TTyCon(view), pkgIdToName)
+
+    // 2. Generate the Marker Struct
+    // This represents the Interface in ContractId<FeaturedAppRight>
     b.addEmptyLine()
-    b.addBlock(s"pub trait $name: daml_types::Template {", "}") {
-      b.addLine(
-        s"// Interface view: ${TypeGen.renderType(moduleId, Ast.TTyCon(view), pkgIdToName)}"
-      )
+    b.addLine("#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]")
+    b.addLine(s"pub struct $name;") // Unit struct
+
+    // 3. Implement Common Trait
+    b.addEmptyLine()
+    b.addBlock(s"impl daml_types::DamlType for $name {", "}") {
+      b.addBlock("fn type_id() -> &'static str {", "}") {
+        // Reconstruct ID: package:module:name
+        val ifaceId = s"${moduleId.pkg}:${moduleId.moduleName}:$name"
+        b.addLine(s""""$ifaceId"""")
+      }
     }
 
-    // We might also generate the Choices associated with this Interface
-    // Note: In Rust, these choices would be generic over <T: InterfaceName>
+    // 3. Implement Interface Trait
+    b.addEmptyLine()
+    b.addBlock(s"impl daml_types::Interface for $name {", "}") {
+      b.addLine(s"type View = $viewType;")
+    }
+
+    // 4. Generate the Choices for this Interface
+    // We pass the struct name ($name) as the 'template' type for the Choice trait
     choices.foreach { choice =>
-      // Logic to render generic choices would go here
-      b.addLine(s"// Choice ${choice.name} for interface $name omitted for brevity")
+      choice.renderRust(moduleId, Right(name), b)
     }
   }
 }

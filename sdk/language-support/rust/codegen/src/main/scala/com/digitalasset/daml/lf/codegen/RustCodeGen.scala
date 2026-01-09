@@ -261,13 +261,14 @@ object RustCodeGen extends StrictLogging {
     val sb = new StringBuilder
     sb.append("// Daml Rust Bindings\n")
     sb.append("// This is a generated file - do not edit manually\n\n")
-
-    allPackages.values.toSeq
-      .sortBy(_.metadata.name)
-      .foreach { packageSig =>
-        val pkgName = sanitizePackageName(packageSig.metadata.name)
-        sb.append(s"pub mod $pkgName;\n")
-      }
+    val uniquePackageNames = allPackages.values
+      .map(sig => sanitizePackageName(sig.metadata.name))
+      .toSeq
+      .distinct
+      .sorted
+    uniquePackageNames.foreach { pkgName =>
+      sb.append(s"pub mod $pkgName;\n")
+    }
 
     val _ = Files.write(outputDir.resolve("lib.rs"), sb.toString().getBytes)
   }
