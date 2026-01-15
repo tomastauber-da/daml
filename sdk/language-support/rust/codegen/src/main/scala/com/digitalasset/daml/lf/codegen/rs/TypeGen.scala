@@ -83,24 +83,41 @@ private object TypeGen {
       typeCon: TypeConId,
       pkgIdToName: Map[PackageId, String],
   ): String = {
-    if (currentModule.pkg != typeCon.pkg) {
-      // External Package
-      val pkgName = pkgIdToName.getOrElse(typeCon.pkg, s"pkg_${typeCon.pkg}")
+    // resolve the package name
+    val pkgName = pkgIdToName.getOrElse(typeCon.pkg, s"pkg_${typeCon.pkg}")
 
-      // FIX: Do not use the nested structure (da::internal::template).
-      // Use the flattened module name (da_internal_template) that matches the filename.
-      val flatModuleName = sanitizeModuleName(typeCon.qualifiedName.module.toString)
+    // Check relation to Current Module
+    val isSamePackage = currentModule.pkg == typeCon.pkg
+    val isSameModule = isSamePackage && currentModule.moduleName == typeCon.qualifiedName.module
 
-      s"crate::$pkgName::$flatModuleName::${typeCon.qualifiedName.name}"
-
-    } else if (currentModule.moduleName != typeCon.qualifiedName.module) {
-      // Local Package, different module
-      // Use flattened name here too
-      val flatModuleName = sanitizeModuleName(typeCon.qualifiedName.module.toString)
-      s"crate::$flatModuleName::${typeCon.qualifiedName.name}"
+    if (isSameModule) {
+      // Case A: Same Module (e.g. referencing a nested type defined in this file)
+      // Fixes: "Enum.Variant" -> "enum::Variant"
+      resolveNestedLocalName(typeCon.qualifiedName.name)
     } else {
-      // Same Module
-      typeCon.qualifiedName.name.dottedName
+      // Case B: Different Module (External OR Local)
+      // Fixes: "crate::Module" -> "crate::package_name::module::Type"
+
+      val flatModuleName = sanitizeModuleName(typeCon.qualifiedName.module.toString)
+      val typeName = resolveNestedLocalName(typeCon.qualifiedName.name)
+
+      s"crate::$pkgName::$flatModuleName::$typeName"
+    }
+  }
+
+  /** * Converts Daml dotted nested names to Rust module paths.
+    * Daml: "MyEnum.MyVariant"
+    * Rust: "myenum::MyVariant" (because we generated a 'mod myenum')
+    */
+  private def resolveNestedLocalName(name: com.digitalasset.daml.lf.data.Ref.DottedName): String = {
+    val segments = name.segments.toSeq
+    if (segments.length == 1) {
+      segments.head
+    } else {
+      // All segments except the last are treated as Modules (Namespaces), so we lowercase them.
+      val modules = segments.dropRight(1).map(_.toLowerCase)
+      val typeName = segments.last
+      (modules :+ typeName).mkString("::")
     }
   }
   // Ensure this matches the logic in RustCodeGen.scala exactly

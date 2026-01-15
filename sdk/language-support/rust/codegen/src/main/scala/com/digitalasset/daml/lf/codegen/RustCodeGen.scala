@@ -37,7 +37,7 @@ object RustCodeGen extends StrictLogging {
 
     Files.createDirectories(conf.outputDirectory)
 
-    val pkgIdToName: Map[PackageId, String] = allPackages.map { case (pid, sig) =>
+    val pkgIdToName = allPackages.map { case (pid, sig) =>
       pid -> sanitizePackageName(sig.metadata.name)
     }
 

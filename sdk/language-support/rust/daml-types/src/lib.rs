@@ -71,6 +71,8 @@ pub type DamlDecimal = DamlNumeric;
 pub type DamlText = String;
 pub type DamlDate = String; // format YYYY-MM-DD
 pub type DamlTime = String; // ISO 8601
+pub type Time = DamlTime;
+pub type Date = DamlDate;
 
 pub trait Data:
     Clone + std::fmt::Debug + PartialEq + serde::Serialize + serde::de::DeserializeOwned
