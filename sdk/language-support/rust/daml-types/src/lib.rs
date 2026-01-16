@@ -171,7 +171,17 @@ where
 // ==============================================================================
 
 pub trait DamlType {
+    /// When representing the Daml package-name, the encoding is of form `#<package-name>`
+    /// where `#` (not a valid package-id character)
     fn type_id() -> &'static str;
+
+    fn package_id() -> &'static str;
+
+    fn package_name() -> &'static str;
+    /// The dot-separated module name of the identifier.
+    fn module_name() -> &'static str;
+    /// The dot-separated name of the entity (e.g. record, template, ...) within the module.
+    fn entity_name() -> &'static str;
 }
 
 /// A trait representing a Daml Template.

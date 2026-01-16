@@ -11,6 +11,36 @@ import com.digitalasset.daml.lf.language.Ast
   */
 private[codegen] sealed trait DefGen {
   def renderRust(b: CodeBuilder): Unit
+
+  def renderDamlTypeImpl(
+      b: CodeBuilder,
+      structName: String,
+      moduleId: ModuleId,
+      packageName: String, // Readable package name
+      entityName: String,
+  ): Unit = {
+    // Construct the full ID once
+    val fullId = s"#$packageName:${moduleId.moduleName}:$entityName"
+
+    b.addEmptyLine()
+    b.addBlock(s"impl daml_types::DamlType for $structName {", "}") {
+      b.addBlock("fn type_id() -> &'static str {", "}") {
+        b.addLine(s""""$fullId"""")
+      }
+      b.addBlock("fn package_id() -> &'static str {", "}") {
+        b.addLine(s""""${moduleId.pkg}"""")
+      }
+      b.addBlock("fn package_name() -> &'static str {", "}") {
+        b.addLine(s""""$packageName"""")
+      }
+      b.addBlock("fn module_name() -> &'static str {", "}") {
+        b.addLine(s""""${moduleId.moduleName}"""")
+      }
+      b.addBlock("fn entity_name() -> &'static str {", "}") {
+        b.addLine(s""""$entityName"""")
+      }
+    }
+  }
 }
 
 /** Generates a Rust module (mod).
@@ -49,19 +79,12 @@ private[codegen] final case class TemplateGen(
     pkgIdToName: Map[PackageId, String],
 ) extends DefGen {
 
-  private val templateId = s"${moduleId.pkg}:${moduleId.moduleName}:$name"
-
   override def renderRust(b: CodeBuilder): Unit = {
     val keyType = keyTypeOpt
       .map(t => TypeGen.renderType(moduleId, t, pkgIdToName))
       .getOrElse("()") // Unit if no key
 
-    b.addEmptyLine()
-    b.addBlock(s"impl daml_types::DamlType for $name {", "}") {
-      b.addBlock("fn type_id() -> &'static str {", "}") {
-        b.addLine(s""""$templateId"""")
-      }
-    }
+    renderDamlTypeImpl(b, name, moduleId, packageName, name)
 
     b.addEmptyLine()
     b.addBlock(s"impl daml_types::Template for $name {", "}") {
@@ -256,14 +279,7 @@ private[codegen] final case class InterfaceGen(
     b.addLine(s"pub struct $name;") // Unit struct
 
     // 3. Implement Common Trait
-    b.addEmptyLine()
-    b.addBlock(s"impl daml_types::DamlType for $name {", "}") {
-      b.addBlock("fn type_id() -> &'static str {", "}") {
-        // Reconstruct ID: package:module:name
-        val ifaceId = s"${moduleId.pkg}:${moduleId.moduleName}:$name"
-        b.addLine(s""""$ifaceId"""")
-      }
-    }
+    renderDamlTypeImpl(b, name, moduleId, packageName, name)
 
     // 3. Implement Interface Trait
     b.addEmptyLine()
