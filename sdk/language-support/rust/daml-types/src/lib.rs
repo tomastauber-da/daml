@@ -6,6 +6,11 @@ use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
 
+#[cfg(feature = "proto")]
+pub trait ToDamlProto {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value;
+}
+
 // ==============================================================================
 // 1. Primitive Types (Daml Compat)
 // ==============================================================================
@@ -13,6 +18,17 @@ use std::marker::PhantomData;
 /// Counterpart to Daml's `Unit`. Serializes to `{}` (empty object).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unit {}
+
+#[cfg(feature = "proto")]
+impl ToDamlProto for Unit {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Unit(
+                (),
+            )),
+        }
+    }
+}
 
 impl Serialize for Unit {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -56,15 +72,46 @@ impl<'de> Deserialize<'de> for Unit {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Party(pub String);
 
+#[cfg(feature = "proto")]
+impl ToDamlProto for Party {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Party(self.0.clone())),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DamlInt(pub i64);
+
+#[cfg(feature = "proto")]
+impl ToDamlProto for DamlInt {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Int64(self.0)),
+        }
+    }
+}
+
+pub type Int = DamlInt;
+
 /// Daml `Int` and `Numeric`. Represented as Strings to avoid precision loss.
 /// You might use crates like `rust_decimal` or `bigdecimal` here in a real app,
 /// wrapped to ensure they serialize to Strings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DamlInt(pub String);
-
-pub type Int = DamlInt;
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DamlNumeric(pub String);
+
+#[cfg(feature = "proto")]
+impl ToDamlProto for DamlNumeric {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(
+                daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Numeric(self.0.clone()),
+            ),
+        }
+    }
+}
+
 pub type Numeric = DamlNumeric;
 
 pub type DamlDecimal = DamlNumeric;
@@ -87,6 +134,17 @@ impl<T: Clone + std::fmt::Debug + PartialEq + serde::Serialize + serde::de::Dese
 /// Uses PhantomData to prevent mixing IDs of different templates.
 #[derive(PartialEq, Eq, Hash)]
 pub struct ContractId<T: ?Sized>(pub String, PhantomData<T>);
+
+#[cfg(feature = "proto")]
+impl<T: ?Sized> ToDamlProto for ContractId<T> {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(
+                daml_proto_rs::com::daml::ledger::api::v2::value::Sum::ContractId(self.0.clone()),
+            ),
+        }
+    }
+}
 
 impl<T> ContractId<T> {
     /// Casts this ContractId to another type (e.g. an Interface).
@@ -133,10 +191,57 @@ impl<'de, T> Deserialize<'de> for ContractId<T> {
 /// Daml `TextMap`. Standard JSON object.
 pub type TextMap<T> = HashMap<String, T>;
 
+#[cfg(feature = "proto")]
+impl<T: ToDamlProto> ToDamlProto for TextMap<T> {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(
+                daml_proto_rs::com::daml::ledger::api::v2::value::Sum::TextMap(
+                    daml_proto_rs::com::daml::ledger::api::v2::TextMap {
+                        entries: self
+                            .iter()
+                            .map(
+                                |x| daml_proto_rs::com::daml::ledger::api::v2::text_map::Entry {
+                                    key: x.0.clone(),
+                                    value: Some(x.1.to_proto()),
+                                },
+                            )
+                            .collect(),
+                    },
+                ),
+            ),
+        }
+    }
+}
+
 /// Daml `Map` (GenMap).
 /// Serializes to `[[k, v], [k, v]]` (Array of entries), not a JSON object.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenMap<K, V>(pub Vec<(K, V)>);
+
+#[cfg(feature = "proto")]
+impl<K: ToDamlProto, V: ToDamlProto> ToDamlProto for GenMap<K, V> {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(
+                daml_proto_rs::com::daml::ledger::api::v2::value::Sum::GenMap(
+                    daml_proto_rs::com::daml::ledger::api::v2::GenMap {
+                        entries: self
+                            .0
+                            .iter()
+                            .map(
+                                |x| daml_proto_rs::com::daml::ledger::api::v2::gen_map::Entry {
+                                    key: Some(x.0.to_proto()),
+                                    value: Some(x.1.to_proto()),
+                                },
+                            )
+                            .collect(),
+                    },
+                ),
+            ),
+        }
+    }
+}
 
 impl<K, V> Serialize for GenMap<K, V>
 where
@@ -245,7 +350,23 @@ mod tests {
     // 2. Implement Template Trait
     impl DamlType for Iou {
         fn type_id() -> &'static str {
-            "d14e08...:Main:Iou"
+            "#test:Main:Iou"
+        }
+
+        fn package_id() -> &'static str {
+            "d14e08"
+        }
+
+        fn package_name() -> &'static str {
+            "test"
+        }
+
+        fn module_name() -> &'static str {
+            "Main"
+        }
+
+        fn entity_name() -> &'static str {
+            "Iou"
         }
     }
     impl Template for Iou {
@@ -292,13 +413,13 @@ mod tests {
     fn test_genmap_serialization() {
         // Daml GenMap: key=Int, val=Text
         let mut entries = Vec::new();
-        entries.push((DamlInt("1".to_string()), "One".to_string()));
-        entries.push((DamlInt("2".to_string()), "Two".to_string()));
+        entries.push((DamlInt(1), "One".to_string()));
+        entries.push((DamlInt(2), "Two".to_string()));
         let map = GenMap(entries);
 
         let json = serde_json::to_string(&map).unwrap();
         // Should be [[k,v], [k,v]]
-        assert_eq!(json, r#"[["1","One"],["2","Two"]]"#);
+        assert_eq!(json, r#"[[1,"One"],[2,"Two"]]"#);
     }
 
     #[test]
