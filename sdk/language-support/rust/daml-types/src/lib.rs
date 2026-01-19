@@ -1,5 +1,7 @@
 // Copyright (c) 2025 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
+#[cfg(feature = "proto")]
+pub use daml_proto_rs;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -7,8 +9,19 @@ use std::fmt;
 use std::marker::PhantomData;
 
 #[cfg(feature = "proto")]
-pub trait ToDamlProto {
+pub trait ToDamlProto: Data {
     fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value;
+
+    fn to_proto_record(&self) -> Option<daml_proto_rs::com::daml::ledger::api::v2::Record> {
+        if let daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Record(r)),
+        } = self.to_proto()
+        {
+            Some(r)
+        } else {
+            None
+        }
+    }
 }
 
 // ==============================================================================
@@ -136,7 +149,7 @@ impl<T: Clone + std::fmt::Debug + PartialEq + serde::Serialize + serde::de::Dese
 pub struct ContractId<T: ?Sized>(pub String, PhantomData<T>);
 
 #[cfg(feature = "proto")]
-impl<T: ?Sized> ToDamlProto for ContractId<T> {
+impl<T: ToDamlProto> ToDamlProto for ContractId<T> {
     fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
         daml_proto_rs::com::daml::ledger::api::v2::Value {
             sum: Some(
@@ -271,6 +284,60 @@ where
     }
 }
 
+// Implementation for Option<T>
+#[cfg(feature = "proto")]
+impl<T: ToDamlProto> ToDamlProto for Option<T> {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(
+                daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Optional(Box::new(
+                    daml_proto_rs::com::daml::ledger::api::v2::Optional {
+                        value: self.as_ref().map(|v| Box::new(v.to_proto())),
+                    },
+                )),
+            ),
+        }
+    }
+}
+
+// Implementation for Vec<T> (Daml List)
+#[cfg(feature = "proto")]
+impl<T: ToDamlProto> ToDamlProto for Vec<T> {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(daml_proto_rs::com::daml::ledger::api::v2::value::Sum::List(
+                daml_proto_rs::com::daml::ledger::api::v2::List {
+                    elements: self.iter().map(|v| v.to_proto()).collect(),
+                },
+            )),
+        }
+    }
+}
+
+// Implementation for String (Daml Text)
+#[cfg(feature = "proto")]
+impl ToDamlProto for String {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Text(
+                self.clone(),
+            )),
+        }
+    }
+}
+
+// Implementation for bool
+#[cfg(feature = "proto")]
+impl ToDamlProto for bool {
+    fn to_proto(&self) -> daml_proto_rs::com::daml::ledger::api::v2::Value {
+        daml_proto_rs::com::daml::ledger::api::v2::Value {
+            sum: Some(daml_proto_rs::com::daml::ledger::api::v2::value::Sum::Bool(
+                *self,
+            )),
+        }
+    }
+}
+
 // ==============================================================================
 // 2. Traits (Replacing Companion Objects)
 // ==============================================================================
@@ -287,6 +354,15 @@ pub trait DamlType {
     fn module_name() -> &'static str;
     /// The dot-separated name of the entity (e.g. record, template, ...) within the module.
     fn entity_name() -> &'static str;
+
+    #[cfg(feature = "proto")]
+    fn to_proto_id() -> daml_proto_rs::com::daml::ledger::api::v2::Identifier {
+        daml_proto_rs::com::daml::ledger::api::v2::Identifier {
+            package_id: format!("#{}", Self::package_name()),
+            module_name: Self::module_name().to_string(),
+            entity_name: Self::entity_name().to_string(),
+        }
+    }
 }
 
 /// A trait representing a Daml Template.
